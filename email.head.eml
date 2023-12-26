@@ -1,0 +1,23 @@
+From: <MAIL_FROM_NAME> <<MAIL_FROM>>
+To: <MAIL_RCPT_NAME> <<MAIL_RCPT>>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="cAyrUzTUPPdpH17GuvThhNwXoaFxTv4A=:<UNIX_TIMESTAMP>"
+Subject: Database Backup
+Reply-To: No-Reply <<NO_REPLY_EMAIL>>
+
+--cAyrUzTUPPdpH17GuvThhNwXoaFxTv4A=:<UNIX_TIMESTAMP>
+Content-Type: text/plain; charset=UTF-8
+Content-Disposition: inline
+Content-Transfer-Encoding: 8bit
+
+Hi Ramone,
+
+Here is your backup for all databases that are on your main
+server. Remember to put this backup in a safe place.
+
+--cAyrUzTUPPdpH17GuvThhNwXoaFxTv4A=:<UNIX_TIMESTAMP>
+Content-Type: application/octet-stream; name="<ARCHIVE_NAME>"
+Content-Disposition: attachment; filename="<ARCHIVE_NAME>"
+Content-Transfer-Encoding: base64
+
+

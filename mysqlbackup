@@ -1,0 +1,76 @@
+#!/bin/bash
+
+environment=$(echo $APPLICATION_ENV)
+wd=$(dirname $0)
+wd=$(realpath $wd)
+suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
+archive_filename="database_backups".$suffix.sql.zip
+timestamp=$(date +%s)
+
+if [[ $environment -ne "prod" ]]; then
+	echo "This script must ONLY be run on the production environment"
+	exit -1
+fi
+
+#read ini values
+source <(grep = conf.ini)
+
+echo "Working directory: $wd"
+cd $wd
+
+echo "Databases: ${databases[*]}"
+
+for database in "${databases[@]}"
+do
+	suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
+	out_filename=$database.$suffix.sql
+	
+	echo "Dumping $database ..."	
+	mysqldump --defaults-file=$mysql_defaults_file \
+				--add-drop-database \
+				--dump-date \
+				--events \
+				--add-drop-table \
+				--default-character-set=utf8 \
+				--routines=true \
+				--events \
+				--databases $database > $out_filename
+	
+
+	zip -u $archive_filename $out_filename
+	
+	echo "Removing $out_filename ..."
+	rm $out_filename
+				
+done
+
+base64 $archive_filename > archive.base64
+cat email.head.eml archive.base64 email.tail.eml > email.eml
+sed -i "s/<ARCHIVE_NAME>/$archive_filename/g" email.eml
+sed -i "s/<UNIX_TIMESTAMP>/$timestamp/g" email.eml
+sed -i "s/<MAIL_FROM_NAME>/$mail_from_name/g" email.eml
+sed -i "s/<MAIL_FROM>/$mail_from/g" email.eml
+sed -i "s/<MAIL_RCPT_NAME>/$mail_rcpt_name/g" email.eml
+sed -i "s/<MAIL_RCPT>/$mail_rcpt/g" email.eml
+sed -i "s/<NO_REPLY_EMAIL>/$no_reply_email/g" email.eml
+
+curl --ssl \
+  --url "smtp://$smtp_host:$smtp_port" \
+  --tlsv1.2 \
+  --cacert $cacert \
+  --login-options "$smtp_login_options" \
+  --mail-from $mail_from \
+  --mail-rcpt $mail_rcpt \
+  --user "$mail_from:$mail_from_password" \
+  --upload-file email.eml
+
+echo "Removing $archive_filename ..."
+rm $archive_filename
+
+echo "Removing archive.base64 ..."
+rm archive.base64
+
+echo "Removing email.eml ..."
+rm email.eml
+
+echo "Done!";
