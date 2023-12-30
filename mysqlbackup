@@ -4,19 +4,98 @@ environment=$(echo $APPLICATION_ENV)
 wd=$(dirname $0)
 wd=$(realpath $wd)
 suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
-archive_filename="database_backups".$suffix.sql.zip
+archive_filename="database_backups".$suffix.zip
 timestamp=$(date +%s)
 
-if [[ $environment -ne "prod" ]]; then
-	echo "This script must ONLY be run on the production environment"
-	exit -1
+validateConfig() {
+	#CA cert
+	if [[ -z "$cacert" ]]; then
+		echo "CA cert not set."
+	    	exit 1;
+	fi
+
+	if ! [[ -f $cacert ]]; then
+    		echo "CA cert '$cacert' is not a file"
+    		exit 1
+    	fi
+
+	if [[ -z "$smtp_host" ]]; then
+		echo "SMTP host not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$smtp_port" ]]; then
+		echo "SMTP port not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$smtp_login_options" ]]; then
+		echo "SMTP login options not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$mail_from_name" ]]; then
+		echo "Mail from name not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$mail_from" ]]; then
+		echo "Mail from email address not set."
+	    	exit 1;
+	fi
+	
+	if [[ -z "$mail_rcpt_name" ]]; then
+		echo "Mail RCPT name not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$mail_rcpt" ]]; then
+		echo "Mail RCPT not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$admin_email_password" ]]; then
+		echo "CA cert not set"
+	    	exit 1;
+	fi
+
+	if [[ -z "$no_reply_email" ]]; then
+		echo "No reply email address not set"
+	    	exit 1;
+	fi
+
+	#MySQL Defaults file
+	if [[ -z "$mysql_defaults_file" ]]; then
+		echo "MySQL defaults file not set"
+	    	exit 1;
+	fi
+
+	if ! test -f "$mysql_defaults_file"; then
+		echo "MySQL defaults file '$mysql_defaults_file' does not exist."
+		exit 1;
+	fi
+
+	if [ ${#databases[@]} -eq 0 ]; then
+	    	echo "No databases set to backup."
+    		exit 1;
+	fi
+}
+
+
+echo "Working directory: $wd"
+cd $wd
+
+#does ini file exist?
+if ! test -f conf.ini; then
+  echo "conf.ini does not exist."
+  exit 1;
 fi
 
 #read ini values
 source <(grep = conf.ini)
 
-echo "Working directory: $wd"
-cd $wd
+#Validate configuration
+validateConfig 
 
 echo "Databases: ${databases[*]}"
 
@@ -24,7 +103,7 @@ for database in "${databases[@]}"
 do
 	suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
 	out_filename=$database.$suffix.sql
-	
+
 	echo "Dumping $database ..."	
 	mysqldump --defaults-file=$mysql_defaults_file \
 				--add-drop-database \
@@ -35,10 +114,15 @@ do
 				--routines=true \
 				--events \
 				--databases $database > $out_filename
-	
+	status=$?
+
+	if [[ $status -ne 0 ]]; then
+		echo "Failed to dump database '$database'."
+		exit 1
+	fi
 
 	zip -u $archive_filename $out_filename
-	
+
 	echo "Removing $out_filename ..."
 	rm $out_filename
 				
@@ -64,6 +148,13 @@ curl --ssl \
   --user "$mail_from:$mail_from_password" \
   --upload-file email.eml
 
+status=$?
+	
+if [[ $status -ne 0 ]]; then
+	echo "Failed to make CURL request."
+	exit 1
+fi
+	
 echo "Removing $archive_filename ..."
 rm $archive_filename
 

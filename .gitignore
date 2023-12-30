@@ -1,1 +1,6 @@
 conf.ini
+*.sql
+*.zip
+archive.base64
+email.eml
+mysql.defaults.ini
