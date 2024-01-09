@@ -54,11 +54,6 @@ validateConfig() {
 	    	exit 1;
 	fi
 
-	if [[ -z "$admin_email_password" ]]; then
-		echo "CA cert not set"
-	    	exit 1;
-	fi
-
 	if [[ -z "$no_reply_email" ]]; then
 		echo "No reply email address not set"
 	    	exit 1;
@@ -80,7 +75,6 @@ validateConfig() {
     		exit 1;
 	fi
 }
-
 
 echo "Working directory: $wd"
 cd $wd
