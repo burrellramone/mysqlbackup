@@ -1,0 +1,174 @@
+function validateEmailMethodConfig() {
+	#CA cert
+	if [[ -z "$cacert" ]]; then
+		echo "CA cert not set."
+	    	exit 1;
+	fi
+
+	if ! [[ -f $cacert ]]; then
+    		echo "CA cert '$cacert' does not exist."
+    		exit 1
+    	fi
+
+	if [[ -z "$smtp_host" ]]; then
+		echo "SMTP host not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$smtp_port" ]]; then
+		echo "SMTP port not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$smtp_login_options" ]]; then
+		echo "SMTP login options not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$mail_from_name" ]]; then
+		echo "Mail from name not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$mail_from" ]]; then
+		echo "Mail from email address not set."
+	    	exit 1;
+	fi
+	
+	if [[ -z "$mail_from_password" ]]; then
+		echo "Mail from password not set."
+	    	exit 1;
+	fi
+	
+	if [[ -z "$mail_rcpt_name" ]]; then
+		echo "Mail RCPT name not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$mail_rcpt" ]]; then
+		echo "Mail RCPT not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$no_reply_email" ]]; then
+		echo "No reply email address not set"
+	    	exit 1;
+	fi
+}
+
+function validateScpMethodConfig() {
+	if [[ -z "$scp_user" ]]; then
+		echo "scp user not set."
+	    	exit 1;
+	fi
+	
+	if [[ -z "$scp_host" ]]; then
+		echo "scp host not set."
+	    	exit 1;
+	fi
+	
+	if [[ -z "$scp_path" ]]; then
+		echo "scp path not set."
+	    	exit 1;
+	fi
+	
+	if [[ -z "$scp_identity_file" ]]; then
+		echo "scp identity file not set."
+	    	exit 1;
+	fi
+	
+	if ! [[ -f $scp_identity_file ]]; then
+    		echo "scp identity file '$scp_identity_file' does not exist."
+    		exit 1
+    	fi
+}
+
+function validateConfig() {
+	if ! [[ ${methods[@]} =~ $method ]]; then
+		echo "Backup method '$method' is not supported."
+	    	exit 1;
+	fi
+
+	#MySQL Defaults file
+	if [[ -z "$mysql_defaults_file" ]]; then
+		echo "MySQL defaults file not set"
+	    	exit 1;
+	fi
+
+	if ! test -f "$mysql_defaults_file"; then
+		echo "MySQL defaults file '$mysql_defaults_file' does not exist."
+		exit 1;
+	fi
+
+	if [ ${#databases[@]} -eq 0 ]; then
+	    	echo "No databases set to backup."
+    		exit 1;
+	fi
+	
+	case $method in
+
+	  'copy')
+		if [[ -z "$copy_to" ]]; then
+			echo "Copy to path not set."
+		    	exit 1;
+		fi
+	    ;;
+
+	  'scp')
+	    #scp
+	    	validateScpMethodConfig
+	    ;;
+
+	  *)
+	    #email
+		validateEmailMethodConfig
+	    ;;
+	esac
+}
+
+function emailDatabasesArchive() {
+	base64 temp/$archive_filename > temp/archive.base64
+	cat email.head.eml temp/archive.base64 email.tail.eml > temp/email.eml
+	sed -i "s/<ARCHIVE_NAME>/$archive_filename/g" temp/email.eml
+	sed -i "s/<UNIX_TIMESTAMP>/$timestamp/g" temp/email.eml
+	sed -i "s/<MAIL_FROM_NAME>/$mail_from_name/g" temp/email.eml
+	sed -i "s/<MAIL_FROM>/$mail_from/g" temp/email.eml
+	sed -i "s/<MAIL_RCPT_NAME>/$mail_rcpt_name/g" temp/email.eml
+	sed -i "s/<MAIL_RCPT>/$mail_rcpt/g" temp/email.eml
+	sed -i "s/<NO_REPLY_EMAIL>/$no_reply_email/g" temp/email.eml
+	sed -i "s/<EMAIL_BODY>/$email_body/g" temp/email.eml
+
+	curl --ssl \
+	  --url "smtp://$smtp_host:$smtp_port" \
+	  --tlsv1.2 \
+	  --cacert $cacert \
+	  --login-options "$smtp_login_options" \
+	  --mail-from $mail_from \
+	  --mail-rcpt $mail_rcpt \
+	  --user "$mail_from:$mail_from_password" \
+	  --upload-file temp/email.eml
+
+	status=$?
+		
+	if [[ $status -ne 0 ]]; then
+		echo "Failed to make CURL request."
+		exit 1
+	fi
+}
+
+function cleanup() {
+	echo "Cleaning up ..."
+	
+	shopt -s nullglob
+
+	#create array with all the files temp/
+	tempfiles=(temp/*)
+
+	for file in "${tempfiles[@]}"; do
+	   	echo "Removing $file ..."
+		rm $file
+	done
+
+	echo "Removing temp directory ..."
+	rm -rf temp/
+}

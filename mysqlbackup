@@ -6,78 +6,13 @@ wd=$(realpath $wd)
 suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
 archive_filename="database_backups".$suffix.zip
 timestamp=$(date +%s)
-
-validateConfig() {
-	#CA cert
-	if [[ -z "$cacert" ]]; then
-		echo "CA cert not set."
-	    	exit 1;
-	fi
-
-	if ! [[ -f $cacert ]]; then
-    		echo "CA cert '$cacert' is not a file"
-    		exit 1
-    	fi
-
-	if [[ -z "$smtp_host" ]]; then
-		echo "SMTP host not set."
-	    	exit 1;
-	fi
-
-	if [[ -z "$smtp_port" ]]; then
-		echo "SMTP port not set."
-	    	exit 1;
-	fi
-
-	if [[ -z "$smtp_login_options" ]]; then
-		echo "SMTP login options not set."
-	    	exit 1;
-	fi
-
-	if [[ -z "$mail_from_name" ]]; then
-		echo "Mail from name not set."
-	    	exit 1;
-	fi
-
-	if [[ -z "$mail_from" ]]; then
-		echo "Mail from email address not set."
-	    	exit 1;
-	fi
-	
-	if [[ -z "$mail_rcpt_name" ]]; then
-		echo "Mail RCPT name not set."
-	    	exit 1;
-	fi
-
-	if [[ -z "$mail_rcpt" ]]; then
-		echo "Mail RCPT not set."
-	    	exit 1;
-	fi
-
-	if [[ -z "$no_reply_email" ]]; then
-		echo "No reply email address not set"
-	    	exit 1;
-	fi
-
-	#MySQL Defaults file
-	if [[ -z "$mysql_defaults_file" ]]; then
-		echo "MySQL defaults file not set"
-	    	exit 1;
-	fi
-
-	if ! test -f "$mysql_defaults_file"; then
-		echo "MySQL defaults file '$mysql_defaults_file' does not exist."
-		exit 1;
-	fi
-
-	if [ ${#databases[@]} -eq 0 ]; then
-	    	echo "No databases set to backup."
-    		exit 1;
-	fi
-}
+methods=('email' 'copy' 'scp')
 
 echo "Working directory: $wd"
 cd $wd
+
+#include functions
+source func
 
 #does ini file exist?
 if ! test -f conf.ini; then
@@ -88,8 +23,14 @@ fi
 #read ini values
 source <(grep = conf.ini)
 
+echo "Backup Method: $method"
+
 #Validate configuration
-validateConfig 
+validateConfig
+
+#make temp directory
+echo "Creating temp directory temp/ ..."
+mkdir -p temp
 
 echo "Databases: ${databases[*]}"
 
@@ -107,7 +48,7 @@ do
 				--default-character-set=utf8 \
 				--routines=true \
 				--events \
-				--databases $database > $out_filename
+				--databases $database > temp/$out_filename
 	status=$?
 
 	if [[ $status -ne 0 ]]; then
@@ -115,47 +56,52 @@ do
 		exit 1
 	fi
 
-	zip -u $archive_filename $out_filename
-
-	echo "Removing $out_filename ..."
-	rm $out_filename
+	zip -u temp/$archive_filename temp/$out_filename
 				
 done
 
-base64 $archive_filename > archive.base64
-cat email.head.eml archive.base64 email.tail.eml > email.eml
-sed -i "s/<ARCHIVE_NAME>/$archive_filename/g" email.eml
-sed -i "s/<UNIX_TIMESTAMP>/$timestamp/g" email.eml
-sed -i "s/<MAIL_FROM_NAME>/$mail_from_name/g" email.eml
-sed -i "s/<MAIL_FROM>/$mail_from/g" email.eml
-sed -i "s/<MAIL_RCPT_NAME>/$mail_rcpt_name/g" email.eml
-sed -i "s/<MAIL_RCPT>/$mail_rcpt/g" email.eml
-sed -i "s/<NO_REPLY_EMAIL>/$no_reply_email/g" email.eml
+case $method in
 
-curl --ssl \
-  --url "smtp://$smtp_host:$smtp_port" \
-  --tlsv1.2 \
-  --cacert $cacert \
-  --login-options "$smtp_login_options" \
-  --mail-from $mail_from \
-  --mail-rcpt $mail_rcpt \
-  --user "$mail_from:$mail_from_password" \
-  --upload-file email.eml
+  'copy')
+	#copy archive
+	#create copy path is not exist
+	mkdir -p $copy_to
+	cp temp/$archive_filename $copy_to 
+    
+	status=$?
 
-status=$?
+	if [[ $status -ne 0 ]]; then
+		echo "Failed to copy temp/$archive_filename to $copy_to"
+		exit 1
+	fi
+    ;;
+
+  'scp')
+	#scp archive
+    	echo "Copying temp/$archive_filename to $scp_user@$scp_host:$scp_path ..."
+    	
+    	#set scp_port to 22 if it is not set
+    	if [[ -z "$scp_port" ]]; then
+		scp_port=22
+	fi
+    
+    	scp -p -i $scp_identity_file -P $scp_port temp/$archive_filename $scp_user@$scp_host:$scp_path
+    	
+    	status=$?
+
+	if [[ $status -ne 0 ]]; then
+		echo "Failed to copy temp/$archive_filename to $scp_user@$scp_host:$scp_path"
+		exit 1
+	fi
+    ;;
+
+  *)
+    #email archive
+	emailDatabasesArchive
+    ;;
+esac
+
 	
-if [[ $status -ne 0 ]]; then
-	echo "Failed to make CURL request."
-	exit 1
-fi
-	
-echo "Removing $archive_filename ..."
-rm $archive_filename
-
-echo "Removing archive.base64 ..."
-rm archive.base64
-
-echo "Removing email.eml ..."
-rm email.eml
+cleanup
 
 echo "Done!";
