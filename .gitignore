@@ -4,3 +4,4 @@ conf.ini
 archive.base64
 email.eml
 mysql.defaults.ini
+build/

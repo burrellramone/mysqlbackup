@@ -1,3 +1,16 @@
+#!/bin/bash
+
+environment=$(echo $APPLICATION_ENV)
+wd=$(dirname $0)
+wd=$(realpath $wd)
+suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
+archive_filename="database_backups".$suffix.zip
+timestamp=$(date +%s)
+methods=('email' 'copy' 'scp')
+emailHead=''
+emailTail=''
+
+### FUNCTIONS ###
 function validateEmailMethodConfig() {
 	#CA cert
 	if [[ -z "$cacert" ]]; then
@@ -126,9 +139,44 @@ function validateConfig() {
 	esac
 }
 
+function getEmailHead(){
+	emailHead="From: <MAIL_FROM_NAME> <<MAIL_FROM>>
+To: <MAIL_RCPT_NAME> <<MAIL_RCPT>>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=\"cAyrUzTUPPdpH17GuvThhNwXoaFxTv4A=:<UNIX_TIMESTAMP>\"
+Subject: Database Backup
+Reply-To: No-Reply <<NO_REPLY_EMAIL>>
+
+--cAyrUzTUPPdpH17GuvThhNwXoaFxTv4A=:<UNIX_TIMESTAMP>
+Content-Type: text/plain; charset=UTF-8
+Content-Disposition: inline
+Content-Transfer-Encoding: 8bit
+
+<EMAIL_BODY>
+
+--cAyrUzTUPPdpH17GuvThhNwXoaFxTv4A=:<UNIX_TIMESTAMP>
+Content-Type: application/octet-stream; name=\"<ARCHIVE_NAME>\"
+Content-Disposition: attachment; filename=\"<ARCHIVE_NAME>\"
+Content-Transfer-Encoding: base64
+
+
+"
+}
+
+function getEmailTail(){
+	emailTail="--cAyrUzTUPPdpH17GuvThhNwXoaFxTv4A=:<UNIX_TIMESTAMP>"
+}
+
 function emailDatabasesArchive() {
+	getEmailHead
+	getEmailTail
+	
 	base64 temp/$archive_filename > temp/archive.base64
-	cat email.head.eml temp/archive.base64 email.tail.eml > temp/email.eml
+	echo "$emailHead" > temp/email.eml
+	cat temp/archive.base64 >> temp/email.eml
+	echo "$emailTail" >> temp/email.eml
+	
+	#stream edit
 	sed -i "s/<ARCHIVE_NAME>/$archive_filename/g" temp/email.eml
 	sed -i "s/<UNIX_TIMESTAMP>/$timestamp/g" temp/email.eml
 	sed -i "s/<MAIL_FROM_NAME>/$mail_from_name/g" temp/email.eml
@@ -152,6 +200,8 @@ function emailDatabasesArchive() {
 		
 	if [[ $status -ne 0 ]]; then
 		echo "Failed to make CURL request."
+		cleanup
+		failed
 		exit 1
 	fi
 }
@@ -172,3 +222,105 @@ function cleanup() {
 	echo "Removing temp directory ..."
 	rm -rf temp/
 }
+
+function failed(){
+	echo "Backup failed"
+}
+## END FUNCTIONS ###
+
+echo "Working directory: $wd"
+cd $wd
+
+#does ini file exist?
+if ! test -f conf.ini; then
+  echo "conf.ini does not exist."
+  exit 1;
+fi
+
+#read ini values
+source <(grep = conf.ini)
+
+echo "Backup Method: $method"
+
+#Validate configuration
+validateConfig
+
+#make temp directory
+echo "Creating temp directory temp/ ..."
+mkdir -p temp
+
+echo "Databases: ${databases[*]}"
+
+for database in "${databases[@]}"
+do
+	suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
+	out_filename=$database.$suffix.sql
+
+	echo "Dumping $database ..."	
+	mysqldump --defaults-file=$mysql_defaults_file \
+				--add-drop-database \
+				--dump-date \
+				--events \
+				--add-drop-table \
+				--default-character-set=utf8 \
+				--routines=true \
+				--events \
+				--databases $database > temp/$out_filename
+	status=$?
+
+	if [[ $status -ne 0 ]]; then
+		echo "Failed to dump database '$database'."
+		cleanup
+		failed
+		exit 1
+	fi
+
+	zip -u temp/$archive_filename temp/$out_filename
+				
+done
+
+case $method in
+
+  'copy')
+	#copy archive
+	#create copy path is not exist
+	mkdir -p $copy_to
+	cp temp/$archive_filename $copy_to 
+    
+	status=$?
+
+	if [[ $status -ne 0 ]]; then
+		echo "Failed to copy temp/$archive_filename to $copy_to"
+		exit 1
+	fi
+    ;;
+
+  'scp')
+	#scp archive
+    	echo "Copying temp/$archive_filename to $scp_user@$scp_host:$scp_path ..."
+    	
+    	#set scp_port to 22 if it is not set
+    	if [[ -z "$scp_port" ]]; then
+		scp_port=22
+	fi
+    
+    	scp -p -i $scp_identity_file -P $scp_port temp/$archive_filename $scp_user@$scp_host:$scp_path
+    	
+    	status=$?
+
+	if [[ $status -ne 0 ]]; then
+		echo "Failed to copy temp/$archive_filename to $scp_user@$scp_host:$scp_path"
+		exit 1
+	fi
+    ;;
+
+  *)
+    #email archive
+	emailDatabasesArchive
+    ;;
+esac
+
+	
+cleanup
+
+echo "Done!";

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="MySQL Backup" default="full-build">
+	
+	<target name="full-build" depends="clean,prepare,shc,copy-binary" description="Compiles Bash script to binary executable">
+		<echo level='info' message="Full Build Complete"/>
+    	</target>
+
+	<property name="shc" value="/usr/bin/shc"/>
+
+	<target name="clean" unless="clean.done" description="Cleanup build artifacts.">
+        	<delete dir="${basedir}/build/"/>
+        	<property name="clean.done" value="true"/>
+    	</target>
+	        	
+	<target name="prepare" if="clean.done" depends="clean" description="Prepare for build.">
+    		<mkdir dir="${basedir}/build"/>
+    		<property name="prepare.done" value="true"/>
+	</target>
+	
+	<target name="shc" if="prepare.done" depends='prepare' description="Compiles Bash script to binary executable.">
+   		<exec executable="${shc}" failonerror='true' resultproperty="result.shc" taskname="shc">
+   			<arg value="-f"/>
+   			<arg value="${basedir}/src/mysqlbackup.sh"/>
+   			<arg value="-o"/>
+   			<arg value="${basedir}/build/mysqlbackup"/>
+       		</exec>
+		<property name="shc.done" value="true"/>
+	</target>
+	
+	<target name="copy-binary" if="shc.done" depends="shc" description="Copy binary executable to base directory.">
+		<copy file="${basedir}/build/mysqlbackup" tofile="${basedir}/mysqlbackup" overwrite="true" verbose="true"/>
+	</target>
+</project>
