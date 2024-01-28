@@ -275,7 +275,7 @@ do
 		exit 1
 	fi
 
-	zip -u temp/$archive_filename temp/$out_filename
+	(cd temp && zip -u $archive_filename $out_filename)
 				
 done
 

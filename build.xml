@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="MySQL Backup" default="full-build">
 	
-	<target name="full-build" depends="clean,prepare,shc,copy-binary" description="Compiles Bash script to binary executable">
+	<target name="full-build" depends="clean,prepare,shc,copy-binary,chmod" description="Compiles Bash script to binary executable">
 		<echo level='info' message="Full Build Complete"/>
     	</target>
 
@@ -29,5 +29,13 @@
 	
 	<target name="copy-binary" if="shc.done" depends="shc" description="Copy binary executable to base directory.">
 		<copy file="${basedir}/build/mysqlbackup" tofile="${basedir}/mysqlbackup" overwrite="true" verbose="true"/>
+	</target>
+	
+	<target name="chmod" if="shc.done" depends='shc' description="Makes the copied binary executable. chmod +x mysqlbackup">
+   		<exec executable="/usr/bin/chmod" failonerror="true" resultproperty="result.chmod" taskname="chmod">
+   			<arg value="+x"/>
+   			<arg value="${basedir}/mysqlbackup"/>
+       		</exec>
+		<property name="chmod.done" value="true"/>
 	</target>
 </project>
