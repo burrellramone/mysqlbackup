@@ -19,6 +19,7 @@
 	
 	<target name="shc" if="prepare.done" depends='prepare' description="Compiles Bash script to binary executable.">
    		<exec executable="${shc}" failonerror='true' resultproperty="result.shc" taskname="shc">
+   			<arg value="-r"/>
    			<arg value="-f"/>
    			<arg value="${basedir}/src/mysqlbackup.sh"/>
    			<arg value="-o"/>
