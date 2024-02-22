@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="MySQL Backup" default="full-build">
 	
-	<target name="full-build" depends="clean,prepare,shc,copy-binary,chmod" description="Compiles Bash script to binary executable">
+	<target name="full-build" depends="clean,prepare,validatesyntax,shc,copy-binary,chmod" description="Compiles Bash script to binary executable">
 		<echo level='info' message="Full Build Complete"/>
     	</target>
 
+	<property name="bash" value="/bin/bash"/>
 	<property name="shc" value="/usr/bin/shc"/>
 
 	<target name="clean" unless="clean.done" description="Cleanup build artifacts.">
@@ -16,8 +17,16 @@
     		<mkdir dir="${basedir}/build"/>
     		<property name="prepare.done" value="true"/>
 	</target>
+
+	<target name="validatesyntax" if="prepare.done" depends='prepare' description="Validates the syntax of the Bash script">
+   		<exec executable="${bash}" failonerror='true' resultproperty="result.validatesyntax" taskname="validatesyntax">
+   			<arg value="-n"/>
+   			<arg value="${basedir}/src/mysqlbackup.sh"/>
+       		</exec>
+		<property name="validatesyntax.done" value="true"/>
+	</target>
 	
-	<target name="shc" if="prepare.done" depends='prepare' description="Compiles Bash script to binary executable.">
+	<target name="shc" if="validatesyntax.done" depends="validatesyntax" description="Compiles Bash script to binary executable.">
    		<exec executable="${shc}" failonerror='true' resultproperty="result.shc" taskname="shc">
    			<arg value="-r"/>
    			<arg value="-f"/>

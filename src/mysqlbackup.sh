@@ -6,7 +6,7 @@ wd=$(realpath $wd)
 suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
 archive_filename="database_backups".$suffix.zip
 timestamp=$(date +%s)
-methods=('email' 'copy' 'scp')
+methods=('email' 'copy' 'scp' 's3')
 emailHead=''
 emailTail=''
 
@@ -93,19 +93,41 @@ function validateScpMethodConfig() {
 	if ! [[ -f $scp_identity_file ]]; then
     		echo "scp identity file '$scp_identity_file' does not exist."
     		exit 1
-    	fi
+	fi
+}
+
+function validateS3MethodConfig() {
+	if [[ -z "$s3_host" ]]; then
+		echo "S3 host not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$s3_access_key" ]]; then
+		echo "S3 access key not set."
+	    	exit 1;
+	fi
+	
+	if [[ -z "$s3_secret_key" ]]; then
+		echo "S3 secret key not set."
+	    	exit 1;
+	fi
+
+	if [[ -z "$s3_bucket" ]]; then
+		echo "S3 bucket not set."
+	    exit 1;
+	fi
 }
 
 function validateConfig() {
 	if ! [[ ${methods[@]} =~ $method ]]; then
 		echo "Backup method '$method' is not supported."
-	    	exit 1;
+	    exit 1;
 	fi
 
 	#MySQL Defaults file
 	if [[ -z "$mysql_defaults_file" ]]; then
 		echo "MySQL defaults file not set"
-	    	exit 1;
+	    exit 1;
 	fi
 
 	if ! test -f "$mysql_defaults_file"; then
@@ -114,29 +136,114 @@ function validateConfig() {
 	fi
 
 	if [ ${#databases[@]} -eq 0 ]; then
-	    	echo "No databases set to backup."
-    		exit 1;
+		echo "No databases set to backup."
+		exit 1;
 	fi
 	
 	case $method in
 
-	  'copy')
-		if [[ -z "$copy_to" ]]; then
-			echo "Copy to path not set."
-		    	exit 1;
-		fi
+		'copy')
+			if [[ -z "$copy_to" ]]; then
+				echo "Copy to path not set."
+				exit 1;
+			fi
 	    ;;
 
-	  'scp')
-	    #scp
-	    	validateScpMethodConfig
+		'scp')
+			#scp
+			validateScpMethodConfig
 	    ;;
 
-	  *)
-	    #email
-		validateEmailMethodConfig
+		's3')
+			#s3
+			validateS3MethodConfig
+
+			#Then try to install Minio Client if not installed
+			s3_bin=$(whereis -b mc | grep '/')
+
+			if [[ -z $s3_bin ]]; then
+				answer=''
+
+				while  [[ $answer != "N" ]] && [[ $answer != "Y" ]]; do
+					read -p "$(tput setaf 2)Minio Client is not installed. Do you want to install it to continue? [Y=yes,N=No]: $(tput sgr0)" answer
+				
+					if [[ $answer != "N" ]] && [[ $answer != "Y" ]]; then
+						echo "$(tput setaf 1)Invalid answer '$answer'$(tput sgr0)"
+					else
+						break
+					fi
+				done
+
+				if [[ $answer == "N" ]]; then
+					echo "Ok"
+					exit 0
+				fi
+
+				installMc
+			fi
+
+			#Set S3 service alias
+			if [[ -z $s3_port ]]; then
+				s3_port='9000'
+			fi
+
+			alias='mysql_database_backup_s3'
+			
+			mc alias set $alias/ https://$s3_host:$s3_port $s3_access_key $s3_secret_key
+
+			#Check if bucket exists and ask to create it if not
+			mc ls $alias/$s3_bucket >> /dev/null 2>&1
+
+			if [[ $? != 0 ]]; then
+				answer=''
+
+				while  [[ $answer != "N" ]] && [[ $answer != "Y" ]]; do
+					read -p "$(tput setaf 2)Bucket '$s3_bucket' does not exist. Do you want to create it? [Y=yes,N=No]: $(tput sgr0)" answer
+				
+					if [[ $answer != "N" ]] && [[ $answer != "Y" ]]; then
+						echo "$(tput setaf 1)Invalid answer '$answer'$(tput sgr0)"
+					else
+						break
+					fi
+				done
+
+				if [[ $answer == "N" ]]; then
+					echo "Ok"
+					exit 0
+				fi
+
+				mc mb $alias/$s3_bucket
+
+				if [[ $status -ne 0 ]]; then
+					echo "Failed to create S3 bucket '$s3_bucket'."
+					cleanup
+					failed
+					exit 1
+				fi
+			fi
+		;;
+
+		*)
+			#email
+			validateEmailMethodConfig
 	    ;;
 	esac
+}
+
+function installMc() {
+	wget https://dl.min.io/client/mc/release/linux-amd64/mc
+	chmod +x mc
+
+	copy_mc=''
+
+	while [[ $copy_mc != 'Y' ]] && [[ $copy_mc != 'N' ]]; do
+		read -s -p "$(tput setaf 2)Do you want to move the Minio Client binary to /usr/bin/ ?: [Y=yes,N=No]$(tput sgr0)" copy_mc
+    done
+
+	if [[ $copy_mc == 'Y' ]]; then
+	    sudo mv mc /usr/bin/
+		echo "$(tput setaf 4)Moved Minio Client binary to /usr/bin/'$(tput sgr0)"
+	fi
 }
 
 function getEmailHead(){
@@ -281,7 +388,7 @@ done
 
 case $method in
 
-  'copy')
+  	'copy')
 	#copy archive
 	#create copy path is not exist
 	mkdir -p $copy_to
@@ -295,7 +402,7 @@ case $method in
 	fi
     ;;
 
-  'scp')
+  	'scp')
 	#scp archive
     	echo "Copying temp/$archive_filename to $scp_user@$scp_host:$scp_path ..."
     	
@@ -314,7 +421,18 @@ case $method in
 	fi
     ;;
 
-  *)
+	's3')
+		mc cp --tags "name=$archive_filename" temp/$archive_filename mysql_database_backup_s3/$s3_bucket/$archive_filename
+		
+		if [[ $? -ne 0 ]]; then
+			echo "Failed to copy temp/$archive_filename to S3 bucket."
+			cleanup
+			failed
+			exit 1
+		fi
+	;;
+
+  	*)
     #email archive
 	emailDatabasesArchive
     ;;
