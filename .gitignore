@@ -6,3 +6,5 @@ email.eml
 mysql.defaults.ini
 build/
 src/*.x.c
+release/*
+!release/**\.zip

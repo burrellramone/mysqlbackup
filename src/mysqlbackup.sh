@@ -16,6 +16,7 @@ timestamp=$(date +%s)
 methods=('email' 'copy' 'scp' 's3')
 emailHead=''
 emailTail=''
+config_file_path='conf.ini'
 
 if ! [[ -z $MYSQL_BACKUP_ENV ]]; then
 	archive_filename="database_backups_${MYSQL_BACKUP_ENV}_${datetime}.zip";
@@ -27,113 +28,113 @@ fi
 function validateEmailMethodConfig() {
 	#CA cert
 	if [[ -z "$cacert" ]]; then
-		echo "CA cert not set."
-	    	exit 1;
+		error "CA cert not set."
+		exit 1;
 	fi
 
 	if ! [[ -f $cacert ]]; then
-    		echo "CA cert '$cacert' does not exist."
-    		exit 1
-    	fi
+		error "CA cert '$cacert' does not exist."
+		exit 1
+	fi
 
 	if [[ -z "$smtp_host" ]]; then
-		echo "SMTP host not set."
-	    	exit 1;
+		error "SMTP host not set."
+		exit 1;
 	fi
 
 	if [[ -z "$smtp_port" ]]; then
-		echo "SMTP port not set."
-	    	exit 1;
+		error "SMTP port not set."
+		exit 1;
 	fi
 
 	if [[ -z "$smtp_login_options" ]]; then
-		echo "SMTP login options not set."
-	    	exit 1;
+		error "SMTP login options not set."
+		exit 1;
 	fi
 
 	if [[ -z "$mail_from_name" ]]; then
-		echo "Mail from name not set."
-	    	exit 1;
+		error "Mail from name not set."
+		exit 1;
 	fi
 
 	if [[ -z "$mail_from" ]]; then
-		echo "Mail from email address not set."
-	    	exit 1;
+		error "Mail from email address not set."
+		exit 1;
 	fi
 	
 	if [[ -z "$mail_from_password" ]]; then
-		echo "Mail from password not set."
-	    	exit 1;
+		error "Mail from password not set."
+		exit 1;
 	fi
 	
 	if [[ -z "$mail_rcpt_name" ]]; then
-		echo "Mail RCPT name not set."
-	    	exit 1;
+		error "Mail RCPT name not set."
+		exit 1;
 	fi
 
 	if [[ -z "$mail_rcpt" ]]; then
-		echo "Mail RCPT not set."
-	    	exit 1;
+		error "Mail RCPT not set."
+		exit 1;
 	fi
 
 	if [[ -z "$no_reply_email" ]]; then
-		echo "No reply email address not set"
-	    	exit 1;
+		error "No reply email address not set"
+		exit 1;
 	fi
 }
 
 function validateScpMethodConfig() {
 	if [[ -z "$scp_user" ]]; then
-		echo "scp user not set."
-	    	exit 1;
+		error "scp user not set."
+		exit 1;
 	fi
 	
 	if [[ -z "$scp_host" ]]; then
-		echo "scp host not set."
-	    	exit 1;
+		error "scp host not set."
+		exit 1;
 	fi
 	
 	if [[ -z "$scp_path" ]]; then
-		echo "scp path not set."
-	    	exit 1;
+		error "scp path not set."
+		exit 1;
 	fi
 	
 	if [[ -z "$scp_identity_file" ]]; then
-		echo "scp identity file not set."
-	    	exit 1;
+		error "scp identity file not set."
+		exit 1;
 	fi
 	
 	if ! [[ -f $scp_identity_file ]]; then
-    		echo "scp identity file '$scp_identity_file' does not exist."
-    		exit 1
+		error "scp identity file '$scp_identity_file' does not exist."
+		exit 1
 	fi
 }
 
 function validateS3MethodConfig() {
 	if [[ -z "$s3_host" ]]; then
-		echo "S3 host not set."
-	    	exit 1;
+		error "S3 host not set."
+		exit 1;
 	fi
 
 	if [[ -z "$s3_access_key" ]]; then
-		echo "S3 access key not set."
-	    	exit 1;
+		error "S3 access key not set."
+		exit 1;
 	fi
 	
 	if [[ -z "$s3_secret_key" ]]; then
-		echo "S3 secret key not set."
-	    	exit 1;
+		error "S3 secret key not set."
+		exit 1;
 	fi
 
 	if [[ -z "$s3_bucket" ]]; then
-		echo "S3 bucket not set."
+		error "S3 bucket not set."
 	    exit 1;
 	fi
 }
 
 function validateConfig() {
 	if ! [[ ${methods[@]} =~ $method ]]; then
-		echo "Backup method '$method' is not supported."
+		error "Backup method '$method' is not supported."
 	    exit 1;
 	fi
 
@@ -142,29 +143,29 @@ function validateConfig() {
 		#check that mysql host, user, and password are provided
 
 		if [[ -z "$mysql_host" ]]; then
-			echo "MySQL host not set."
+			error "MySQL host not set."
 			exit 1;
 		fi
 
 		if [[ -z "$mysql_user" ]]; then
-			echo "MySQL user not set."
+			error "MySQL user not set."
 			exit 1;
 		fi
 
 		if [[ -z "$mysql_password" ]]; then
-			echo "MySQL password not set."
+			error "MySQL password not set."
 			exit 1;
 		fi
 	else
 		#test that it is actully a file
 		if ! test -f "$mysql_defaults_file"; then
-			echo "MySQL defaults file '$mysql_defaults_file' does not exist."
+			error "MySQL defaults file '$mysql_defaults_file' does not exist."
 			exit 1;
 		fi
 	fi
 
 	if [ ${#databases[@]} -eq 0 ]; then
-		echo "No databases set to backup."
+		error "No databases set to backup."
 		exit 1;
 	fi
 	
@@ -172,7 +173,7 @@ function validateConfig() {
 
 		'copy')
 			if [[ -z "$copy_to" ]]; then
-				echo "Copy to path not set."
+				error "Copy to path not set."
 				exit 1;
 			fi
 	    ;;
@@ -196,7 +197,7 @@ function validateConfig() {
 					read -p "$(tput setaf 2)Minio Client is not installed. Do you want to install it to continue? [Y=yes,N=No]: $(tput sgr0)" answer
 				
 					if [[ $answer != "N" ]] && [[ $answer != "Y" ]]; then
-						echo "$(tput setaf 1)Invalid answer '$answer'$(tput sgr0)"
+						error "Invalid answer '$answer'"
 					else
 						break
 					fi
@@ -229,7 +230,7 @@ function validateConfig() {
 					read -p "$(tput setaf 2)Bucket '$s3_bucket' does not exist. Do you want to create it? [Y=yes,N=No]: $(tput sgr0)" answer
 				
 					if [[ $answer != "N" ]] && [[ $answer != "Y" ]]; then
-						echo "$(tput setaf 1)Invalid answer '$answer'$(tput sgr0)"
+						error "Invalid answer '$answer'"
 					else
 						break
 					fi
@@ -243,7 +244,7 @@ function validateConfig() {
 				mc mb $alias/$s3_bucket
 
 				if [[ $status -ne 0 ]]; then
-					echo "Failed to create S3 bucket '$s3_bucket'."
+					error "Failed to create S3 bucket '$s3_bucket'."
 					cleanup
 					failed
 					exit 1
@@ -334,7 +335,7 @@ function emailDatabasesArchive() {
 	status=$?
 		
 	if [[ $status -ne 0 ]]; then
-		echo "Failed to make CURL request."
+		error "Failed to make CURL request."
 		cleanup
 		failed
 		exit 1
@@ -381,20 +382,28 @@ case $1 in
 		success "$version_text"
 		exit 0
 	;;
+
+	*)
+		if ! [[ -z $1 ]]; then
+			config_file_path=$1
+		fi
+	;;
 esac
 
 ## BEGIN WORK ##
 echo "Working directory: $wd"
-cd $wd
+cd "$wd"
 
 #does ini file exist?
-if ! test -f conf.ini; then
-  echo "conf.ini does not exist."
+if ! test -f $config_file_path; then
+  error "Configuration file '$config_file_path' does not exist."
   exit 1;
 fi
 
+echo "Configuration file: $config_file_path"
+
 #read ini values
-source <(grep = conf.ini)
+source <(grep = $config_file_path)
 
 echo "Backup Method: $method"
 
@@ -451,7 +460,7 @@ do
 	status=$?
 
 	if [[ $status -ne 0 ]]; then
-		echo "Failed to dump database '$database'."
+		error "Failed to dump database '$database'."
 		cleanup
 		failed
 		exit 1
@@ -472,7 +481,7 @@ case $method in
 	status=$?
 
 	if [[ $status -ne 0 ]]; then
-		echo "Failed to copy temp/$archive_filename to $copy_to"
+		error "Failed to copy temp/$archive_filename to $copy_to"
 		exit 1
 	fi
     ;;
@@ -491,7 +500,7 @@ case $method in
     	status=$?
 
 	if [[ $status -ne 0 ]]; then
-		echo "Failed to copy temp/$archive_filename to $scp_user@$scp_host:$scp_path"
+		error "Failed to copy temp/$archive_filename to $scp_user@$scp_host:$scp_path"
 		exit 1
 	fi
     ;;
@@ -500,7 +509,7 @@ case $method in
 		mc cp --tags "name=$archive_filename" temp/$archive_filename mysql_database_backup_s3/$s3_bucket/$archive_filename
 		
 		if [[ $? -ne 0 ]]; then
-			echo "Failed to copy temp/$archive_filename to S3 bucket."
+			error "Failed to copy temp/$archive_filename to S3 bucket."
 			cleanup
 			failed
 			exit 1
