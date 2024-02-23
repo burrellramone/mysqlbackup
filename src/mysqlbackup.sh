@@ -2,6 +2,8 @@
 #Environment variables
 #MYSQL_BACKUP_ENV
 #=================#
+version="0.0.1"
+version_text="MySQL Backup v${version}"
 wd=$(dirname $0)
 wd=$(realpath $wd)
 datetime=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
@@ -352,10 +354,31 @@ function cleanup() {
 }
 
 function failed(){
-	echo "Backup failed"
+	error "Backup failed"
+}
+
+function error(){
+	echo "$(tput setaf 1)$1$(tput sgr0)"
+}
+
+function success(){
+	echo "$(tput setaf 2)$1$(tput sgr0)"
 }
 ## END FUNCTIONS ###
 
+case $1 in
+	'help')
+		success "Please see: https://github.com/burrellramone/mysqlbackup"
+		exit 0
+	;;
+
+  	'version')
+		success "$version_text"
+		exit 0
+	;;
+esac
+
+## BEGIN WORK ##
 echo "Working directory: $wd"
 cd $wd
 
