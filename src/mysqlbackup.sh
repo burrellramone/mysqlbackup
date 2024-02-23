@@ -1,8 +1,13 @@
 #!/bin/bash
-#Environment variables
-#MYSQL_BACKUP_ENV
-#=================#
-version="0.0.1"
+###################################################################
+#Script Name	: MySQL Backup                                                                                          
+#Description	: Backup script to dump your databases using mysqldump, archive the databases in a single ZIP archive then backup the archive by email, copy, scp or S3.                                                                                
+#Args           : help | version                                                                                           
+#Author       	: Ramone Burrell                                              
+#Email         	: ramone@ramoneburrell.com
+#Environment variables : MYSQL_BACKUP_ENV                                
+###################################################################
+version="0.0.1-alpha"
 version_text="MySQL Backup v${version}"
 wd=$(dirname $0)
 wd=$(realpath $wd)
