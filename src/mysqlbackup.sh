@@ -1,14 +1,20 @@
 #!/bin/bash
-
-environment=$(echo $APPLICATION_ENV)
+#Environment variables
+#MYSQL_BACKUP_ENV
+#=================#
 wd=$(dirname $0)
 wd=$(realpath $wd)
-suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
-archive_filename="database_backups".$suffix.zip
+datetime=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
 timestamp=$(date +%s)
 methods=('email' 'copy' 'scp' 's3')
 emailHead=''
 emailTail=''
+
+if ! [[ -z $MYSQL_BACKUP_ENV ]]; then
+	archive_filename="database_backups_${MYSQL_BACKUP_ENV}_${datetime}.zip";
+else
+	archive_filename="database_backups_${datetime}.zip";
+fi
 
 ### FUNCTIONS ###
 function validateEmailMethodConfig() {
@@ -375,8 +381,13 @@ echo "Databases: ${databases[*]}"
 
 for database in "${databases[@]}"
 do
-	suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
-	out_filename=$database.$suffix.sql
+	out_filename=''
+
+	if ! [[ -z $MYSQL_BACKUP_ENV ]]; then
+		out_filename="${database}_${MYSQL_BACKUP_ENV}_$datetime.sql";
+	else
+		out_filename="${database}_${datetime}.sql";
+	fi
 
 	echo "Dumping $database ..."
 	
