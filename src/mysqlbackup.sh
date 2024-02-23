@@ -126,13 +126,28 @@ function validateConfig() {
 
 	#MySQL Defaults file
 	if [[ -z "$mysql_defaults_file" ]]; then
-		echo "MySQL defaults file not set"
-	    exit 1;
-	fi
+		#check that mysql host, user, and password are provided
 
-	if ! test -f "$mysql_defaults_file"; then
-		echo "MySQL defaults file '$mysql_defaults_file' does not exist."
-		exit 1;
+		if [[ -z "$mysql_host" ]]; then
+			echo "MySQL host not set."
+			exit 1;
+		fi
+
+		if [[ -z "$mysql_user" ]]; then
+			echo "MySQL user not set."
+			exit 1;
+		fi
+
+		if [[ -z "$mysql_password" ]]; then
+			echo "MySQL password not set."
+			exit 1;
+		fi
+	else
+		#test that it is actully a file
+		if ! test -f "$mysql_defaults_file"; then
+			echo "MySQL defaults file '$mysql_defaults_file' does not exist."
+			exit 1;
+		fi
 	fi
 
 	if [ ${#databases[@]} -eq 0 ]; then
@@ -363,16 +378,37 @@ do
 	suffix=$(date | sed -E 's/\s/-/g' | sed -E 's/:/-/g')
 	out_filename=$database.$suffix.sql
 
-	echo "Dumping $database ..."	
-	mysqldump --defaults-file=$mysql_defaults_file \
-				--add-drop-database \
-				--dump-date \
-				--events \
-				--add-drop-table \
-				--default-character-set=utf8 \
-				--routines=true \
-				--events \
-				--databases $database > temp/$out_filename
+	echo "Dumping $database ..."
+	
+	#Use defaults file
+	if ! [[ -z $mysql_defaults_file ]]; then
+		mysqldump --defaults-file=$mysql_defaults_file \
+					--add-drop-database \
+					--dump-date \
+					--events \
+					--add-drop-table \
+					--default-character-set=utf8 \
+					--routines=true \
+					--events \
+					--databases $database > temp/$out_filename
+	else
+		#else use host, user, password and port provided in config file
+		if [[ -z $mysql_port ]]; then
+			mysql_port='3306'
+		fi
+
+		mysqldump --host=$mysql_host --user=$mysql_user --password=$mysql_password --port=$mysql_port \
+					--add-drop-database \
+					--dump-date \
+					--events \
+					--add-drop-table \
+					--default-character-set=utf8 \
+					--routines=true \
+					--events \
+					--databases $database > temp/$out_filename
+		
+	fi
+
 	status=$?
 
 	if [[ $status -ne 0 ]]; then
