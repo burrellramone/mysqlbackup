@@ -132,6 +132,20 @@ function validateS3MethodConfig() {
 	fi
 }
 
+function checkDependencies(){
+	dependencies=(zip)
+
+	for dependency in "${dependencies[@]}"
+	do
+		zip --version
+
+		if [[ $? != 0 ]];then
+			error "{$dependency} is not installed. Please install it.";
+			exit 1
+		fi
+	done
+}
+
 function validateConfig() {
 	if ! [[ ${methods[@]} =~ $method ]]; then
 		error "Backup method '$method' is not supported."
@@ -409,6 +423,10 @@ echo "Backup Method: $method"
 
 #Validate configuration
 validateConfig
+
+#Check that we have everything installed that we need
+checkDependencies
+
 
 #make temp directory
 echo "Creating temp directory temp/ ..."
