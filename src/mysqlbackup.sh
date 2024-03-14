@@ -133,11 +133,11 @@ function validateS3MethodConfig() {
 }
 
 function checkDependencies(){
-	dependencies=(zip)
+	dependencies=(mysqldump zip)
 
 	for dependency in "${dependencies[@]}"
 	do
-		zip --version
+		$dependency --version
 
 		if [[ $? != 0 ]];then
 			error "{$dependency} is not installed. Please install it.";
