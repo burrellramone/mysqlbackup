@@ -431,13 +431,10 @@ do
 	#Use defaults file
 	if ! [[ -z $mysql_defaults_file ]]; then
 		mysqldump --defaults-file=$mysql_defaults_file \
-					--add-drop-database \
+					--default-character-set=utf8 \
 					--dump-date \
 					--events \
-					--add-drop-table \
-					--default-character-set=utf8 \
 					--routines=true \
-					--events \
 					--databases $database > temp/$out_filename
 	else
 		#else use host, user, password and port provided in config file
@@ -446,15 +443,11 @@ do
 		fi
 
 		mysqldump --host=$mysql_host --user=$mysql_user --password=$mysql_password --port=$mysql_port \
-					--add-drop-database \
+					--default-character-set=utf8 \
 					--dump-date \
 					--events \
-					--add-drop-table \
-					--default-character-set=utf8 \
 					--routines=true \
-					--events \
 					--databases $database > temp/$out_filename
-		
 	fi
 
 	status=$?
