@@ -7,7 +7,7 @@
 #Email         	: ramone@ramoneburrell.com
 #Environment variables : MYSQL_BACKUP_ENV                                
 ###################################################################
-version="0.0.1-alpha"
+version="0.0.2-alpha"
 version_text="MySQL Backup v${version}"
 wd=$(dirname $0)
 wd=$(realpath $wd)
@@ -130,6 +130,20 @@ function validateS3MethodConfig() {
 		error "S3 bucket not set."
 	    exit 1;
 	fi
+}
+
+function checkDependencies(){
+	dependencies=(mysqldump zip)
+
+	for dependency in "${dependencies[@]}"
+	do
+		$dependency --version
+
+		if [[ $? != 0 ]];then
+			error "{$dependency} is not installed. Please install it.";
+			exit 1
+		fi
+	done
 }
 
 function validateConfig() {
@@ -409,6 +423,10 @@ echo "Backup Method: $method"
 
 #Validate configuration
 validateConfig
+
+#Check that we have everything installed that we need
+checkDependencies
+
 
 #make temp directory
 echo "Creating temp directory temp/ ..."
