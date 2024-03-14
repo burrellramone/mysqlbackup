@@ -7,7 +7,7 @@
 #Email         	: ramone@ramoneburrell.com
 #Environment variables : MYSQL_BACKUP_ENV                                
 ###################################################################
-version="0.0.1-alpha"
+version="0.0.2-alpha"
 version_text="MySQL Backup v${version}"
 wd=$(dirname $0)
 wd=$(realpath $wd)
